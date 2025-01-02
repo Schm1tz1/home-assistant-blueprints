@@ -47,7 +47,7 @@ blueprint:
         the names of sensors being low on battery.
       selector:
         action: {}
-  source_url: https://gist.github.com/Schm1tz1/61bdaa8a968473eaa9c0ffd42300ac45
+  source_url: https://github.com/Schm1tz1/home-assistant-blueprints/blob/main/low-battery-level-detection-notification-for-all-battery-sensors.yaml
 variables:
   day: !input 'day'
   threshold: !input 'threshold'
