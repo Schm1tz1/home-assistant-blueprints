@@ -1,0 +1,156 @@
+blueprint:
+  name: Current detection automation
+  description: Current detection automation to detect start/stop of devices based of power consumption.
+  domain: automation
+  input:
+    power_entity:
+      name: Power/Current Sensor
+      selector:
+        entity:
+          filter:
+            - device_class: power
+              domain: sensor
+            - device_class: current
+              domain: sensor
+    on_threshold:
+      name: Power-On threshold
+      description: Threshold to consider the device as on
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 9999999999
+          mode: box
+    on_time:
+      name: Power-On time
+      description: Time after which the device is considered on if power is above threshold
+      default: '00:00:10'
+      selector:
+        time: {}
+    on_actions:
+      name: On-Actions
+      description: Actions to be performed when device is turned on.
+      selector:
+        action: {}
+    off_threshold:
+      name: Power-Off threshold
+      description: Threshold to consider the device as off
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 9999999999
+          mode: box
+    off_time:
+      name: Power-Off time
+      description: Time after which the device is considered off if power is below threshold
+      default: '00:10:00'
+      selector:
+        time: {}
+    off_actions:
+      name: Off-Actions
+      description: Actions to be performed when device is turned off.
+      selector:
+        action: {}
+variables:
+  power_entity: !input 'power_entity'
+  on_threshold: !input 'on_threshold'
+  on_time: !input 'on_time'
+  on_actions: !input 'on_actions'
+  off_threshold: !input 'off_threshold'
+  off_time: !input 'off_time'
+  off_actions: !input 'off_actions'
+triggers:
+  - trigger: numeric_state
+    entity_id: !input 'power_entity'
+    for:
+      !input 'on_time'
+    above: !input 'on_threshold'
+    id: power_on
+  - trigger: numeric_state
+    entity_id:
+      - sensor.gosund_sp111_spulmaschine_energy_power_4
+    for:
+      !input 'off_time'
+    id: power_off
+    below: !input 'off_threshold'
+---
+alias: Ein- und Ausschaltsignal Spülmaschine
+description: ""
+triggers:
+  - trigger: numeric_state
+    entity_id:
+      - sensor.gosund_sp111_spulmaschine_energy_power_4
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 10
+    above: 10
+    id: power_on
+  - trigger: numeric_state
+    entity_id:
+      - sensor.gosund_sp111_spulmaschine_energy_power_4
+    for:
+      hours: 0
+      minutes: 10
+      seconds: 0
+    id: power_off
+    below: 2
+conditions:
+  - condition: state
+    entity_id: switch.gosund_sp111_spulmaschine_4
+    state: "on"
+    for:
+      hours: 0
+      minutes: 10
+      seconds: 0
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - power_on
+        sequence:
+          - metadata: {}
+            data:
+              message: Anlaufstrom erkannt bei Spülmaschine !
+            action: notify.telegramhomeassistant
+          - action: switch.turn_off
+            metadata: {}
+            data: {}
+            target:
+              entity_id: switch.gosund_sp111_spulmaschine_4
+          - action: switch.turn_on
+            metadata: {}
+            data: {}
+            target:
+              entity_id: switch.spulmaschine_is_controlled
+            enabled: true
+          - action: automation.turn_on
+            metadata: {}
+            data: {}
+            target:
+              entity_id: automation.verbraucher_nach_pv
+            enabled: false
+      - conditions:
+          - condition: trigger
+            id:
+              - power_off
+        sequence:
+          - metadata: {}
+            data:
+              message: Spülmaschine ist fertig !
+            action: notify.telegramhomeassistant
+          - action: switch.turn_off
+            metadata: {}
+            data: {}
+            target:
+              entity_id: switch.spulmaschine_is_controlled
+            enabled: true
+          - action: automation.turn_off
+            metadata: {}
+            data: {}
+            target:
+              entity_id: automation.verbraucher_nach_pv
+            enabled: false
+mode: single
