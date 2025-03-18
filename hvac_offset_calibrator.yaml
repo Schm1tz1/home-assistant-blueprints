@@ -162,10 +162,22 @@ action:
             id:
               - hvac_heat_offset
         sequence:
-          - service: system_log.write
+          - service: climate.set_temperature
+            target:
+              entity_id: !input hvac
             data:
-              message: 'HVAC heating offset changed: {{trigger.from_state}} -> {{trigger.to_state}}'
-              level: info
+              temperature: >
+                {% set old_offset = trigger.from_state.state %}
+                {% set new_offset = trigger.to_state.state %}
+
+                {% set current_set_temp = state_attr(hvac, "temperature") | float %}
+                {% set current_mode = states(hvac) %}
+
+                {% if current_mode == 'heat' -%}
+                  {{ (current_set_temp - old_offset + new_offset) | float }}
+                {%- else -%}
+                  {{ current_set_temp }}
+                {%- endif %}
 
       - alias: 'HVAC cooling offset changed'
         conditions:
@@ -173,8 +185,20 @@ action:
           id:
             - hvac_cool_offset
         sequence:
-          - service: system_log.write
+          - service: climate.set_temperature
+            target:
+              entity_id: !input hvac
             data:
-              message: 'HVAC cooling offset changed: {{trigger.from_state}} -> {{trigger.to_state}}'
-              level: info
+              temperature: >
+                {% set old_offset = trigger.from_state.state %}
+                {% set new_offset = trigger.to_state.state %}
+
+                {% set current_set_temp = state_attr(hvac, "temperature") | float %}
+                {% set current_mode = states(hvac) %}
+
+                {% if current_mode == 'cool' -%}
+                  {{ (current_set_temp - old_offset + new_offset) | float }}
+                {%- else -%}
+                  {{ current_set_temp }}
+                {%- endif %}
  
