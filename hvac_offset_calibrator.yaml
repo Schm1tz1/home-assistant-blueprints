@@ -1,6 +1,6 @@
 blueprint:
   name: HVAC Calibrator
-  description: Calibrate your HVAC using an external sensor and a numeric input entity to store 2 offsets (for heating/cooling). 
+  description: Calibrate your HVAC using an external sensor and a numeric input entity to store 2 offsets (for heating/cooling). Offset values are rounded to 0.5 degrees.
   domain: automation
   input:
     hvac:
@@ -27,10 +27,19 @@ blueprint:
       selector:
         entity:
           domain: input_number
+    interval_in_minutes:
+      name: Interval to periodically update offsets
+      description: Periodically check the offset between setpoint and external sensor every few minutes
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
     delay_in_minutes:
       name: Delay in minutes
       description: Your thermostat will take some time to update the current temperature after calibration. The delay should be higher than this time.
-      default: 1
+      default: 5
       selector:
         number:
           min: 1
@@ -67,12 +76,9 @@ trigger:
       hours: 0
       minutes: 0
       seconds: 0
-  - platform: state
-    entity_id: !input temperature_sensor
-    for:
-      hours: 0
-      minutes: 0
-      seconds: 0
+  - platform: time_pattern
+    id: hvac_timer
+    minutes: !input interval_in_minutes
 
 condition:
   - condition: template
@@ -90,6 +96,7 @@ action:
       minutes: !input delay_in_minutes
       seconds: 0
       milliseconds: 0
+      
   - service: input_number.set_value
     target:
       entity_id: !input hvac_offset_heat
@@ -101,7 +108,7 @@ action:
             {% set hvac_offset_heat = states(hvac_offset_heat) | float %}
            
             {% if hvac_mode == 'heat' -%}
-              {{ hvac_temperature - room_temperature }}
+              {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
             {%- else -%}
               {{ hvac_offset_heat }}
             {%- endif %}
@@ -117,7 +124,7 @@ action:
             {% set hvac_offset_cool = states(hvac_offset_cool) | float %}
            
             {%- if hvac_mode == 'cool' %} 
-              {{ hvac_temperature - room_temperature }}
+              {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
             {%- else -%}
               {{ hvac_offset_cool }}
             {%- endif %}
