@@ -164,7 +164,7 @@ action:
         sequence:
           - service: system_log.write
             data:
-              message: 'HVAC heating offset changed: {{trigger.from_state.state}} -> {{trigger.to_state.state}}'
+              message: 'HVAC heating offset changed: {{trigger.from_state}} -> {{trigger.to_state}}'
               level: info
 
       - alias: 'HVAC cooling offset changed'
@@ -175,6 +175,6 @@ action:
         sequence:
           - service: system_log.write
             data:
-              message: 'HVAC cooling offset changed: {{trigger.from_state.state}} -> {{trigger.to_state.state}}'
+              message: 'HVAC cooling offset changed: {{trigger.from_state}} -> {{trigger.to_state}}'
               level: info
  
