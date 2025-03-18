@@ -167,8 +167,8 @@ action:
               entity_id: !input hvac
             data:
               temperature: >
-                {% set old_offset = trigger.from_state.state %}
-                {% set new_offset = trigger.to_state.state %}
+                {% set old_offset = trigger.from_state.state | float %}
+                {% set new_offset = trigger.to_state.state | float %}
 
                 {% set current_set_temp = state_attr(hvac, "temperature") | float %}
                 {% set current_mode = states(hvac) %}
@@ -190,8 +190,8 @@ action:
               entity_id: !input hvac
             data:
               temperature: >
-                {% set old_offset = trigger.from_state.state %}
-                {% set new_offset = trigger.to_state.state %}
+                {% set old_offset = trigger.from_state.state | float %}
+                {% set new_offset = trigger.to_state.state | float %}
 
                 {% set current_set_temp = state_attr(hvac, "temperature") | float %}
                 {% set current_mode = states(hvac) %}
