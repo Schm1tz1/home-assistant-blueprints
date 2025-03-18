@@ -30,7 +30,7 @@ blueprint:
     interval_in_minutes:
       name: Interval to periodically update offsets
       description: Periodically check the offset between setpoint and external sensor every few minutes
-      default: 15
+      default: 20
       selector:
         number:
           min: 1
@@ -38,7 +38,7 @@ blueprint:
           step: 1
     delay_in_minutes:
       name: Delay in minutes
-      description: Your thermostat will take some time to update the current temperature after calibration. The delay should be higher than this time.
+      description: Initial delay to update offsets after changing the HVAC mode.
       default: 5
       selector:
         number:
@@ -58,20 +58,24 @@ trigger:
   - platform: state
     entity_id: !input hvac
     id: hvac_state
+    from: "off"
+    to:
+      - "heat"
+      - "cool"
     for:
       hours: 0
-      minutes: 0
+      minutes: !input delay_in_minutes
       seconds: 0
   - platform: state
     entity_id: !input hvac_offset_heat
-    id: hvac_heat
+    id: hvac_heat_offset
     for:
       hours: 0
       minutes: 0
       seconds: 0
   - platform: state
     entity_id: !input hvac_offset_cool
-    id: hvac_cool
+    id: hvac_cool_offset
     for:
       hours: 0
       minutes: 0
@@ -91,41 +95,86 @@ condition:
     value_template: '{{ states(temperature_sensor) != "unavailable" and states(temperature_sensor) != "unknown" }}'
 
 action:
-  - delay:
-      hours: 0
-      minutes: !input delay_in_minutes
-      seconds: 0
-      milliseconds: 0
+  - choose:
+      - alias: 'HVAC turned on to heat/cool'
+        conditions:
+          - condition: trigger
+            id:
+              - hvac_state
+        sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: !input hvac
+            data:
+              temperature: >
+                {% set old_state = trigger.from_state.state %}
+                {% set current_set_temp = state_attr(hvac, "temperature") | float %}
+                {% set current_offset_heat = states(hvac_offset_heat) | float %}
+                {% set current_offset_cool = states(hvac_offset_cool) | float %}
+                {% set current_mode = states(hvac) %}
+                {% if current_mode == 'heat' -%}
+                  {{ current_set_temp + current_offset_heat }}
+                {%- elif current_mode == 'cool' %} 
+                  {{ current_set_temp + current_offset_cool }}
+                {%- else -%}
+                  {{ current_set_temp }}
+                {%- endif %}
+
+      - alias: 'HVAC cooling offset update timer'
+        conditions:
+          - condition: trigger
+            id:
+              - hvac_timer
+          - condition: state
+            entity_id: !input hvac
+            state: 'cool'
+        sequence:
+          - service: input_number.set_value
+            target:
+              entity_id: !input hvac_offset_cool
+            data:
+              value: >- 
+                {% set room_temperature = states(temperature_sensor) | float %}
+                {% set hvac_temperature = state_attr(hvac, "temperature") | float %}              
+                {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
+
+      - alias: 'HVAC heating offset update timer'
+        conditions:
+          - condition: trigger
+            id:
+              - hvac_timer
+          - condition: state
+            entity_id: !input hvac
+            state: 'heat'
+        sequence:
+          - service: input_number.set_value
+            target:
+              entity_id: !input hvac_offset_heat
+            data:
+              value: >- 
+                {% set room_temperature = states(temperature_sensor) | float %}
+                {% set hvac_temperature = state_attr(hvac, "temperature") | float %}              
+                {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
       
-  - service: input_number.set_value
-    target:
-      entity_id: !input hvac_offset_heat
-    data:
-      value: >- 
-            {% set hvac_mode = states(hvac) %}
-            {% set room_temperature = states(temperature_sensor) | float %}
-            {% set hvac_temperature = state_attr(hvac, "temperature") | float %}
-            {% set hvac_offset_heat = states(hvac_offset_heat) | float %}
-           
-            {% if hvac_mode == 'heat' -%}
-              {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
-            {%- else -%}
-              {{ hvac_offset_heat }}
-            {%- endif %}
-            
-  - service: input_number.set_value
-    target:
-      entity_id: !input hvac_offset_cool
-    data:
-      value: >- 
-            {% set hvac_mode = states(hvac) %}
-            {% set room_temperature = states(temperature_sensor) | float %}
-            {% set hvac_temperature = state_attr(hvac, "temperature") | float %}
-            {% set hvac_offset_cool = states(hvac_offset_cool) | float %}
-           
-            {%- if hvac_mode == 'cool' %} 
-              {{ (hvac_temperature - room_temperature) | round(1, 'half', 0) }}
-            {%- else -%}
-              {{ hvac_offset_cool }}
-            {%- endif %}
-            
+      - alias: 'HVAC heating offset changed'
+        conditions:
+          - condition: trigger
+            id:
+              - hvac_heat_offset
+        sequence:
+          - service: system_log.write
+            data:
+              message: 'HVAC heating offset changed: {{trigger.from_state.state}} -> {{trigger.to_state.state}}'
+              level: info
+
+      - alias: 'HVAC cooling offset changed'
+        conditions:
+        - condition: trigger
+          id:
+            - hvac_cool_offset
+        sequence:
+          - service: system_log.write
+            data:
+              message: 'HVAC cooling offset changed: {{trigger.from_state.state}} -> {{trigger.to_state.state}}'
+              level: info
+ 
